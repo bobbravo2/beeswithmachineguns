@@ -32,7 +32,7 @@ import sys
 import time
 import urllib2
 
-import boto
+import boto.ec2
 import paramiko
 
 EC2_INSTANCE_TYPE = 't1.micro'
@@ -44,22 +44,24 @@ def _read_server_list():
     instance_ids = []
 
     if not os.path.isfile(STATE_FILENAME):
-        return (None, None, None)
+        return (None, None, None, None)
 
     with open(STATE_FILENAME, 'r') as f:
         username = f.readline().strip()
         key_name = f.readline().strip()
+        zone = f.readline().strip()
         text = f.read()
         instance_ids = text.split('\n')
 
         print 'Read %i bees from the roster.' % len(instance_ids)
 
-    return (username, key_name, instance_ids)
+    return (username, key_name, zone, instance_ids)
 
-def _write_server_list(username, key_name, instances):
+def _write_server_list(username, key_name, zone, instances):
     with open(STATE_FILENAME, 'w') as f:
         f.write('%s\n' % username)
         f.write('%s\n' % key_name)
+        f.write('%s\n' % zone)
         f.write('\n'.join([instance.id for instance in instances]))
 
 def _delete_server_list():
@@ -68,13 +70,24 @@ def _delete_server_list():
 def _get_pem_path(key):
     return os.path.expanduser('~/.ssh/%s.pem' % key)
 
+def _get_region(zone):
+    region_name = zone[:-1]
+    region = boto.ec2.get_region(region_name)
+    if not region:
+        valid_regions = ', '.join((r.name for r in boto.ec2.regions()))
+        print '%s does not appear to be a valid region.' % region_name
+        print 'Valid regions are: %s' % valid_regions
+        return False
+    else:
+        return region
+
 # Methods
 
 def up(count, group, zone, image_id, username, key_name):
     """
     Startup the load testing server.
     """
-    existing_username, existing_key_name, instance_ids = _read_server_list()
+    existing_username, existing_key_name, existing_zone, instance_ids = _read_server_list()
 
     if instance_ids:
         print 'Bees are already assembled and awaiting orders.'
@@ -88,9 +101,11 @@ def up(count, group, zone, image_id, username, key_name):
         print 'No key file found at %s' % pem_path
         return
 
+    region = _get_region(zone)
+    if not region:
+        return
     print 'Connecting to the hive.'
-
-    ec2_connection = boto.connect_ec2()
+    ec2_connection = region.connect()
 
     print 'Attempting to call up %i bees.' % count
 
@@ -119,7 +134,7 @@ def up(count, group, zone, image_id, username, key_name):
 
     ec2_connection.create_tags(instance_ids, { "Name": "a bee!" })
 
-    _write_server_list(username, key_name, reservation.instances)
+    _write_server_list(username, key_name, zone, reservation.instances)
 
     print 'The swarm has assembled %i bees.' % len(reservation.instances)
 
@@ -127,13 +142,16 @@ def report():
     """
     Report the status of the load testing servers.
     """
-    username, key_name, instance_ids = _read_server_list()
+    username, key_name, zone, instance_ids = _read_server_list()
 
     if not instance_ids:
         print 'No bees have been mobilized.'
         return
 
-    ec2_connection = boto.connect_ec2()
+    region = _get_region(zone)
+    if not region:
+        return
+    ec2_connection = region.connect()
 
     reservations = ec2_connection.get_all_instances(instance_ids=instance_ids)
 
@@ -149,15 +167,17 @@ def down():
     """
     Shutdown the load testing server.
     """
-    username, key_name, instance_ids = _read_server_list()
+    username, key_name, zone, instance_ids = _read_server_list()
 
     if not instance_ids:
         print 'No bees have been mobilized.'
         return
 
+    region = _get_region(zone)
+    if not region:
+        return
     print 'Connecting to the hive.'
-
-    ec2_connection = boto.connect_ec2()
+    ec2_connection = region.connect()
 
     print 'Calling off the swarm.'
 
@@ -274,7 +294,7 @@ def attack(url, n, c):
     """
     Test the root url of this site.
     """
-    username, key_name, instance_ids = _read_server_list()
+    username, key_name, zone, instance_ids = _read_server_list()
 
     if not instance_ids:
         print 'No bees are ready to attack.'
@@ -282,7 +302,10 @@ def attack(url, n, c):
 
     print 'Connecting to the hive.'
 
-    ec2_connection = boto.connect_ec2()
+    region = _get_region(zone)
+    if not region:
+        return
+    ec2_connection = region.connect()
 
     print 'Assembling bees.'
 
