@@ -71,7 +71,7 @@ def _get_pem_path(key):
     return os.path.expanduser('~/.ssh/%s.pem' % key)
 
 def _get_region(zone):
-    region_name = zone[:-1]
+    region_name = zone
     region = boto.ec2.get_region(region_name)
     if not region:
         valid_regions = ', '.join((r.name for r in boto.ec2.regions()))
