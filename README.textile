@@ -43,12 +43,13 @@ h2. Usage
 A typical bees session looks something like this:
 
 <pre>
-bees up -s 4 -g public -k frakkingtoasters
+bees up -s 4 -g public -k frakkingtoasters -z us-east-#
 bees attack -n 10000 -c 250 -u http://www.ournewwebbyhotness.com/
 bees down
 </pre>
 
 This spins up 4 servers in security group 'public' using the EC2 keypair 'frakkingtoasters', whose private key is expected to reside at ~/.ssh/frakkingtoasters.pem.
+The -z specifies the EC2 zone to deploy to
 
 *Note*: the default EC2 security group is called 'default' and by default it locks out SSH access. I recommend creating a 'public' security group for use with the bees and explicitly opening port 22 on that group.
 
